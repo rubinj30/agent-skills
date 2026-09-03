@@ -9,11 +9,19 @@ A personal collection of reusable Agent Skills for Codex, with the same `SKILL.m
 
 ## Install
 
-Install the collection and choose Codex, Cursor, or both when prompted:
+Install globally for use across local Codex and Cursor projects:
+
+```bash
+npx skills@latest add rubinj30/agent-skills --global --agent codex cursor
+```
+
+Or install into one project and choose the target agent when prompted:
 
 ```bash
 npx skills@latest add rubinj30/agent-skills
 ```
+
+Because this repository is private, authenticate GitHub on the machine before installing.
 
 Then invoke a skill explicitly—for example:
 
