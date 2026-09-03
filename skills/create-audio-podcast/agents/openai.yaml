@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Audio Podcast"
+  short_description: "Turn source material into a two-host podcast"
+  default_prompt: "Use $create-audio-podcast to turn this material into a natural two-host podcast I can play on my iPhone."
