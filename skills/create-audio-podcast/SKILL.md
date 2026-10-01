@@ -39,22 +39,35 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
 
 5. Render and verify.
    - Set `OPENAI_API_KEY` in the environment or pass `--env-file` pointing to a protected env file. Never print, copy into an artifact, or expose the key.
+   - For a mobile deliverable, preflight the template and require M4A packaging before spending speech API usage:
+
+     ```bash
+     python3 scripts/render_podcast.py podcast-script.json --output-dir podcast-output --compress always --dry-run
+     ```
+
    - Run:
 
      ```bash
-     python3 scripts/render_podcast.py podcast-script.json --output-dir podcast-output --compress auto
+     python3 scripts/render_podcast.py podcast-script.json --output-dir podcast-output --compress always
      ```
 
-   - The renderer uses distinct voices, writes a lossless WAV, creates an M4A when `ffmpeg` is available, and builds `index.html`, `transcript.txt`, and `manifest.json`.
+   - The renderer uses the Speech API directly and does not require the OpenAI Python package. It writes a lossless WAV, creates an M4A through `ffmpeg` or optional `imageio-ffmpeg`, and builds `index.html`, `transcript.txt`, and `manifest.json`.
+   - Run the deterministic bundle check after rendering:
+
+     ```bash
+     python3 scripts/render_podcast.py podcast-script.json --output-dir podcast-output --verify-only
+     ```
+
    - Listen to the opening, one middle transition, and the ending. Check intelligibility, speaker distinction, pacing, truncation, silence, clipping, and pronunciation.
    - If the delivery misses, change the script or host `delivery` guidance and render a new version. Keep the prior version recoverable.
+   - If the key exists only on another machine, the encoder is unavailable, synthesis succeeds but packaging fails, or a WAV link will not open, read [references/rendering-and-recovery.md](references/rendering-and-recovery.md) before retrying. Recover the existing WAV instead of repeating paid synthesis.
 
 6. Deliver for iPhone.
    - Prefer the generated `index.html`, whose large native audio controls, download link, transcript, and AI-voice disclosure work well on mobile Safari.
-   - Provide a clickable page link and a direct audio link when the conversation can attach artifacts.
+   - Provide a clickable page link and a direct M4A link when the conversation can attach artifacts. Treat WAV as the lossless source, not the primary mobile delivery format.
    - For remote listening, publish the complete output directory only to an existing user-authorized static host or storage location.
    - Obtain explicit approval before making private or sensitive source material publicly accessible.
-   - Verify the page returns HTTP 200, references the current audio filename, and the audio endpoint supports byte ranges (HTTP 206) for seeking.
+   - Verify the player references the manifest's current audio filename. For hosted delivery, also require HTTP 200 for the page and byte-range support (HTTP 206) for seeking.
 
 ## Quality bar
 

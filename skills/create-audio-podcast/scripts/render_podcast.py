@@ -40,19 +40,41 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("script", type=Path, help="Path to podcast-script.json")
     parser.add_argument("--output-dir", type=Path, default=Path("podcast-output"))
-    parser.add_argument("--output-name", default="podcast", help="Safe basename without extension")
-    parser.add_argument("--env-file", type=Path, help="Optional env file containing OPENAI_API_KEY")
+    parser.add_argument(
+        "--output-name", default="podcast", help="Safe basename without extension"
+    )
+    parser.add_argument(
+        "--env-file", type=Path, help="Optional env file containing OPENAI_API_KEY"
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--voice-a", help="Override host_a voice")
     parser.add_argument("--voice-b", help="Override host_b voice")
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument(
+        "--template",
+        type=Path,
+        help="Mobile-player HTML template (defaults to the skill's bundled asset)",
+    )
+    parser.add_argument(
+        "--package-existing",
+        type=Path,
+        metavar="WAV",
+        help="Package an existing WAV without calling the speech API",
+    )
+    parser.add_argument(
         "--compress",
         choices=("auto", "always", "never"),
         default="auto",
-        help="Create an AAC M4A with ffmpeg when available",
+        help="Create an AAC M4A with ffmpeg or optional imageio-ffmpeg",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Validate without API calls")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Validate without API calls"
+    )
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Verify an existing output bundle without API calls",
+    )
     return parser.parse_args()
 
 
@@ -88,8 +110,12 @@ def load_script(path: Path) -> dict[str, Any]:
         host = hosts.get(speaker)
         if not isinstance(host, dict):
             raise ScriptError(f"hosts.{speaker} must be an object")
-        host["name"] = require_text(host.get("name"), f"hosts.{speaker}.name", max_chars=60)
-        host["role"] = require_text(host.get("role"), f"hosts.{speaker}.role", max_chars=180)
+        host["name"] = require_text(
+            host.get("name"), f"hosts.{speaker}.name", max_chars=60
+        )
+        host["role"] = require_text(
+            host.get("role"), f"hosts.{speaker}.role", max_chars=180
+        )
         host["delivery"] = require_text(
             host.get("delivery"), f"hosts.{speaker}.delivery", max_chars=500
         )
@@ -187,7 +213,9 @@ def synthesize_pcm(
         except urllib.error.HTTPError as exc:
             details = exc.read(2_000).decode("utf-8", errors="replace")
             if exc.code not in RETRYABLE_HTTP_CODES or attempt == 3:
-                raise RuntimeError(f"Speech API returned HTTP {exc.code}: {details}") from exc
+                raise RuntimeError(
+                    f"Speech API returned HTTP {exc.code}: {details}"
+                ) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             if attempt == 3:
                 raise RuntimeError(f"Speech API request failed: {exc}") from exc
@@ -196,8 +224,18 @@ def synthesize_pcm(
 
 
 def safe_output_name(value: str) -> str:
-    if not value or value in {".", ".."} or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for char in value):
-        raise ScriptError("--output-name may contain only letters, numbers, hyphens, and underscores")
+    if (
+        not value
+        or value in {".", ".."}
+        or any(
+            char
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+            for char in value
+        )
+    ):
+        raise ScriptError(
+            "--output-name may contain only letters, numbers, hyphens, and underscores"
+        )
     return value
 
 
@@ -210,11 +248,29 @@ def write_transcript(data: dict[str, Any], path: Path) -> None:
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
-def compress_m4a(wav_path: Path, m4a_path: Path, mode: str) -> Path:
+def find_ffmpeg() -> str | None:
     ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+    try:
+        import imageio_ffmpeg  # type: ignore[import-not-found]
+
+        candidate = imageio_ffmpeg.get_ffmpeg_exe()
+    except (ImportError, RuntimeError):
+        return None
+    return candidate if Path(candidate).is_file() else None
+
+
+def compress_m4a(
+    wav_path: Path, m4a_path: Path, mode: str, *, ffmpeg: str | None = None
+) -> Path:
+    ffmpeg = ffmpeg or find_ffmpeg()
     if not ffmpeg:
         if mode == "always":
-            raise RuntimeError("--compress always requires ffmpeg")
+            raise RuntimeError(
+                "--compress always requires ffmpeg on PATH or the optional "
+                "imageio-ffmpeg package"
+            )
         return wav_path
     command = [
         ffmpeg,
@@ -245,10 +301,44 @@ def duration_label(seconds: float) -> str:
     return f"{minutes}:{remainder:02d}"
 
 
+def resolve_template(explicit_path: Path | None) -> Path:
+    template_path = explicit_path or (
+        Path(__file__).resolve().parent.parent / "assets" / "mobile-player.html"
+    )
+    try:
+        template = template_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError(
+            f"Cannot read mobile-player template at {template_path}. "
+            "Copy the complete skill directory or pass --template."
+        ) from exc
+    required = {
+        "{{TITLE}}",
+        "{{DESCRIPTION}}",
+        "{{AUDIO_FILE}}",
+        "{{AUDIO_TYPE}}",
+        "{{DURATION}}",
+        "{{SOURCE_NOTE}}",
+        "{{TRANSCRIPT}}",
+    }
+    missing = sorted(
+        placeholder for placeholder in required if placeholder not in template
+    )
+    if missing:
+        raise RuntimeError(
+            f"Mobile-player template is missing placeholders: {', '.join(missing)}"
+        )
+    return template_path
+
+
 def write_player(
-    data: dict[str, Any], *, audio_path: Path, duration_seconds: float, output_path: Path
+    data: dict[str, Any],
+    *,
+    audio_path: Path,
+    duration_seconds: float,
+    output_path: Path,
+    template_path: Path,
 ) -> None:
-    template_path = Path(__file__).resolve().parent.parent / "assets" / "mobile-player.html"
     template = template_path.read_text(encoding="utf-8")
     transcript_parts = []
     for turn in data["turns"]:
@@ -278,64 +368,173 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def inspect_wav(path: Path) -> float:
+    try:
+        with wave.open(str(path), "rb") as reader:
+            frame_rate = reader.getframerate()
+            frames = reader.getnframes()
+    except (OSError, wave.Error) as exc:
+        raise RuntimeError(f"Cannot read valid WAV audio from {path}: {exc}") from exc
+    if frame_rate <= 0 or frames <= 0:
+        raise RuntimeError(f"WAV audio is empty or invalid: {path}")
+    return frames / frame_rate
+
+
+def package_existing_wav(source: Path, destination: Path) -> float:
+    duration_seconds = inspect_wav(source)
+    if source.resolve() != destination.resolve():
+        shutil.copy2(source, destination)
+    return duration_seconds
+
+
+def verify_output(data: dict[str, Any], args: argparse.Namespace) -> None:
+    manifest_path = args.output_dir / "manifest.json"
+    player_path = args.output_dir / "index.html"
+    transcript_path = args.output_dir / "transcript.txt"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        player = player_path.read_text(encoding="utf-8")
+        transcript_path.read_text(encoding="utf-8")
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Cannot read complete output bundle: {exc}") from exc
+
+    audio_name = manifest.get("audio_file")
+    if not isinstance(audio_name, str) or Path(audio_name).name != audio_name:
+        raise RuntimeError("Manifest audio_file must be a safe filename")
+    audio_path = args.output_dir / audio_name
+    if not audio_path.is_file():
+        raise RuntimeError(f"Manifest audio file is missing: {audio_path}")
+    if manifest.get("audio_sha256") != sha256(audio_path):
+        raise RuntimeError("Audio hash does not match manifest")
+    if manifest.get("script_sha256") != sha256(args.script):
+        raise RuntimeError("Script hash does not match manifest")
+    if audio_name not in player:
+        raise RuntimeError("Player does not reference the manifest audio file")
+    if "{{" in player or "}}" in player:
+        raise RuntimeError("Player contains unresolved template placeholders")
+    if audio_path.suffix.lower() == ".wav":
+        inspect_wav(audio_path)
+    elif audio_path.suffix.lower() == ".m4a":
+        with audio_path.open("rb") as file_handle:
+            header = file_handle.read(64)
+        if b"ftyp" not in header:
+            raise RuntimeError("M4A audio is missing an ISO media header")
+    else:
+        raise RuntimeError(f"Unsupported manifest audio format: {audio_path.suffix}")
+    if manifest.get("title") != data["title"]:
+        raise RuntimeError("Manifest title does not match script")
+    duration_seconds = manifest.get("duration_seconds")
+    if not isinstance(duration_seconds, (int, float)) or duration_seconds <= 0:
+        raise RuntimeError("Manifest duration_seconds must be positive")
+    print(f"valid=true audio={audio_path} duration_seconds={duration_seconds}")
+
+
+def preflight_packaging(args: argparse.Namespace) -> tuple[Path, str | None]:
+    template_path = resolve_template(args.template)
+    ffmpeg = find_ffmpeg() if args.compress != "never" else None
+    if args.compress == "always" and not ffmpeg:
+        raise RuntimeError(
+            "--compress always requires ffmpeg on PATH or the optional "
+            "imageio-ffmpeg package"
+        )
+    if args.compress == "auto" and not ffmpeg:
+        print(
+            "warning=ffmpeg_unavailable output=wav mobile_compatibility=degraded",
+            file=sys.stderr,
+        )
+    return template_path, ffmpeg
+
+
 def render(data: dict[str, Any], args: argparse.Namespace) -> None:
     output_name = safe_output_name(args.output_name)
     if not 0.25 <= args.speed <= 4.0:
         raise ScriptError("--speed must be between 0.25 and 4.0")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    transcript_path = args.output_dir / "transcript.txt"
-    write_transcript(data, transcript_path)
-
+    if args.dry_run and (args.package_existing or args.verify_only):
+        raise ScriptError("--dry-run cannot be combined with packaging or verification")
+    if args.package_existing and args.verify_only:
+        raise ScriptError("--package-existing cannot be combined with --verify-only")
     characters = sum(len(turn["text"]) for turn in data["turns"])
     words = sum(len(turn["text"].split()) for turn in data["turns"])
     estimated_minutes = words / 145
     if args.dry_run:
+        preflight_packaging(args)
         print(
             f"valid=true turns={len(data['turns'])} characters={characters} "
             f"estimated_minutes={estimated_minutes:.1f}"
         )
         return
 
-    api_key = read_api_key(args.env_file)
-    wav_path = args.output_dir / f"{output_name}.wav"
-    partial_path = args.output_dir / f".{output_name}.partial.wav"
-    total_frames = 0
-    try:
-        with wave.open(str(partial_path), "wb") as writer:
-            writer.setnchannels(CHANNELS)
-            writer.setsampwidth(SAMPLE_WIDTH)
-            writer.setframerate(SAMPLE_RATE)
-            for index, turn in enumerate(data["turns"], start=1):
-                speaker = turn["speaker"]
-                host = data["hosts"][speaker]
-                voice_override = args.voice_a if speaker == "host_a" else args.voice_b
-                voice = voice_override or host["voice"] or DEFAULT_VOICES[speaker]
-                pcm = synthesize_pcm(
-                    api_key,
-                    model=args.model,
-                    voice=voice,
-                    speed=args.speed,
-                    instructions=speech_instructions(host),
-                    text=turn["text"],
-                )
-                writer.writeframesraw(pcm)
-                total_frames += len(pcm) // (CHANNELS * SAMPLE_WIDTH)
-                if index < len(data["turns"]):
-                    pause_frames = round(SAMPLE_RATE * 0.22)
-                    writer.writeframesraw(b"\x00" * pause_frames * CHANNELS * SAMPLE_WIDTH)
-                    total_frames += pause_frames
-                print(f"rendered_turn={index}/{len(data['turns'])} speaker={speaker}")
-        partial_path.replace(wav_path)
-    except Exception:
-        partial_path.unlink(missing_ok=True)
-        raise
+    if args.verify_only:
+        verify_output(data, args)
+        return
 
-    duration_seconds = total_frames / SAMPLE_RATE
+    template_path, ffmpeg = preflight_packaging(args)
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    transcript_path = args.output_dir / "transcript.txt"
+    write_transcript(data, transcript_path)
+
+    wav_path = args.output_dir / f"{output_name}.wav"
+    if args.package_existing:
+        duration_seconds = package_existing_wav(args.package_existing, wav_path)
+        print(f"packaged_existing={args.package_existing}")
+    else:
+        api_key = read_api_key(args.env_file)
+        partial_path = args.output_dir / f".{output_name}.partial.wav"
+        total_frames = 0
+        try:
+            with wave.open(str(partial_path), "wb") as writer:
+                writer.setnchannels(CHANNELS)
+                writer.setsampwidth(SAMPLE_WIDTH)
+                writer.setframerate(SAMPLE_RATE)
+                for index, turn in enumerate(data["turns"], start=1):
+                    speaker = turn["speaker"]
+                    host = data["hosts"][speaker]
+                    voice_override = (
+                        args.voice_a if speaker == "host_a" else args.voice_b
+                    )
+                    voice = voice_override or host["voice"] or DEFAULT_VOICES[speaker]
+                    pcm = synthesize_pcm(
+                        api_key,
+                        model=args.model,
+                        voice=voice,
+                        speed=args.speed,
+                        instructions=speech_instructions(host),
+                        text=turn["text"],
+                    )
+                    writer.writeframesraw(pcm)
+                    total_frames += len(pcm) // (CHANNELS * SAMPLE_WIDTH)
+                    if index < len(data["turns"]):
+                        pause_frames = round(SAMPLE_RATE * 0.22)
+                        writer.writeframesraw(
+                            b"\x00" * pause_frames * CHANNELS * SAMPLE_WIDTH
+                        )
+                        total_frames += pause_frames
+                    print(
+                        f"rendered_turn={index}/{len(data['turns'])} speaker={speaker}"
+                    )
+            partial_path.replace(wav_path)
+        except Exception:
+            partial_path.unlink(missing_ok=True)
+            raise
+        duration_seconds = total_frames / SAMPLE_RATE
+
     audio_path = wav_path
     if args.compress != "never":
-        audio_path = compress_m4a(wav_path, args.output_dir / f"{output_name}.m4a", args.compress)
+        audio_path = compress_m4a(
+            wav_path,
+            args.output_dir / f"{output_name}.m4a",
+            args.compress,
+            ffmpeg=ffmpeg,
+        )
     player_path = args.output_dir / "index.html"
-    write_player(data, audio_path=audio_path, duration_seconds=duration_seconds, output_path=player_path)
+    write_player(
+        data,
+        audio_path=audio_path,
+        duration_seconds=duration_seconds,
+        output_path=player_path,
+        template_path=template_path,
+    )
 
     manifest = {
         "title": data["title"],
