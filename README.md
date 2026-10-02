@@ -7,7 +7,8 @@ A personal collection of reusable Agent Skills for Codex, with the same `SKILL.m
 ### [Create Audio Podcast](skills/create-audio-podcast/SKILL.md)
 
 - Turn documents, webpages, research, or code changes into a podcast for listening on the go.
-- Write a conversation between two hosts, with questions, examples, and constructive pushback.
+- Write a conversation between a female and male co-host who share the lead, ask follow-ups, and explore examples and tradeoffs.
+- Guide natural phrasing, varied turn lengths, and voice delivery; audition a short pilot when changing voices or delivery.
 - Generate distinct OpenAI voices, a transcript, and an iPhone-friendly M4A recording and player.
 - Keep claims grounded in the source and check the audio bundle before delivery.
 - Use with: `$create-audio-podcast Turn this report into a podcast I can listen to on my iPhone.`

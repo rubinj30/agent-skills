@@ -25,7 +25,7 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
 3. Draft the conversation.
    - Read [references/podcast-script-format.md](references/podcast-script-format.md) completely before writing the script.
    - Default to 6–12 minutes and approximately 135–155 spoken words per minute unless the user specifies otherwise.
-   - Give the hosts stable roles: `host_a` guides, challenges, and translates for the audience; `host_b` explains, qualifies, and tests the reasoning.
+   - Default to Maya, a female co-host, and Theo, a male co-host. Use distinct voices and the detailed delivery directions in the script reference. Both hosts explain and challenge; let them exchange the lead as the topic develops.
    - Write substantive exchanges rather than alternating monologues. Use questions, clarifications, respectful pushback, callbacks, and synthesis where they improve understanding.
    - Keep the conversation natural without invented personal experiences, fake quotations, empty banter, or claims absent from the source.
    - Save the structured result as `podcast-script.json` and a human-readable copy as `podcast-script.txt`.
@@ -36,6 +36,7 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
    - Expand acronyms on first use, verbalize symbols and URLs, and rewrite dense tables or code as explanations.
    - Remove markdown, citations, stage directions, and parentheticals that the voice model might read aloud. Preserve citations in the brief and transcript metadata instead.
    - Run the renderer with `--dry-run`; resolve every validation error before spending API usage.
+   - Perform the conversation edit in the script reference: check that responses depend on the previous turn, exchanges vary in length, and each topic includes an example and a substantive follow-up.
 
 5. Render and verify.
    - Set `OPENAI_API_KEY` in the environment or pass `--env-file` pointing to a protected env file. Never print, copy into an artifact, or expose the key.
@@ -58,7 +59,8 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
      python3 scripts/render_podcast.py podcast-script.json --output-dir podcast-output --verify-only
      ```
 
-   - Listen to the opening, one middle transition, and the ending. Check intelligibility, speaker distinction, pacing, truncation, silence, clipping, and pronunciation.
+   - For a new voice pair or materially changed delivery, synthesize a separate 45–90 second pilot script with both speakers, a brief reaction, a detailed explanation, and a transition before producing the full episode. Audition it when playback is available. Check that the voices convey the requested female/male presentation, stay distinct, and have comparable loudness; voice names alone do not establish these properties. If auditioning is unavailable, say that perceived naturalness remains unverified.
+   - Listen to the opening, one middle transition, and the ending. Check intelligibility, speaker distinction, pacing, truncation, silence, clipping, and pronunciation. Technical bundle verification does not establish whether a conversation sounds natural.
    - If the delivery misses, change the script or host `delivery` guidance and render a new version. Keep the prior version recoverable.
    - If the key exists only on another machine, the encoder is unavailable, synthesis succeeds but packaging fails, or a WAV link will not open, read [references/rendering-and-recovery.md](references/rendering-and-recovery.md) before retrying. Recover the existing WAV instead of repeating paid synthesis.
 
