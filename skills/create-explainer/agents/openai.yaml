@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Explainer"
+  short_description: "Explain ideas with clear words and useful visuals"
+  default_prompt: "Use $create-explainer to explain this topic using clear language and the most useful visual or interactive format."
