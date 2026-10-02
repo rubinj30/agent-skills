@@ -4,9 +4,31 @@ A personal collection of reusable Agent Skills for Codex, with the same `SKILL.m
 
 ## Skills
 
-- **`create-audio-podcast`** — turn source material into a grounded two-host podcast, natural AI narration, transcript, and iPhone-friendly player.
-- **`improve-codebase-architecture`** — inspect a repository, find evidence-backed architectural friction, and rank high-leverage refactoring opportunities.
-- **`create-explainer`** — explain complex ideas with clear language, diagrams, interactive HTML, or narrated video, inspired by Andrej Karpathy's approach.
+### [Create Audio Podcast](skills/create-audio-podcast/SKILL.md)
+
+- Turn documents, webpages, research, or code changes into a podcast for listening on the go.
+- Write a conversation between two hosts, with questions, examples, and constructive pushback.
+- Generate distinct OpenAI voices, a transcript, and an iPhone-friendly M4A recording and player.
+- Keep claims grounded in the source and check the audio bundle before delivery.
+- Use with: `$create-audio-podcast Turn this report into a podcast I can listen to on my iPhone.`
+
+### [Improve Codebase Architecture](skills/improve-codebase-architecture/SKILL.md)
+
+- Review code, tests, and commit history to find recurring architectural friction.
+- Identify scattered logic, complicated interfaces, tangled dependencies, and weak test coverage.
+- Rank a small set of refactoring opportunities with evidence, tradeoffs, and a top recommendation.
+- Help design and implement a selected change when requested, using reversible steps and behavior checks.
+- Use with: `$improve-codebase-architecture Find the most valuable architecture improvement in this repository.`
+
+### [Create Explainer](skills/create-explainer/SKILL.md)
+
+- Make complex topics, systems, research, or AI outputs easier to understand.
+- Choose clear writing, diagrams, interactive HTML, or narrated video according to the learning task and available tools.
+- Use simplified technical language, concrete examples, and visuals that show how the mechanism works.
+- Check factual accuracy and verify interactive controls or generated media before delivery.
+- Use with: `$create-explainer Explain this system with an interactive visual that lets me explore how it works.`
+
+The podcast skill is for an audio conversation; the explainer skill helps choose a format and can use the podcast skill when audio is the best fit.
 
 ## Install
 
