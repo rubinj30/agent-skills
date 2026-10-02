@@ -6,6 +6,7 @@ A personal collection of reusable Agent Skills for Codex, with the same `SKILL.m
 
 - **`create-audio-podcast`** — turn source material into a grounded two-host podcast, natural AI narration, transcript, and iPhone-friendly player.
 - **`improve-codebase-architecture`** — inspect a repository, find evidence-backed architectural friction, and rank high-leverage refactoring opportunities.
+- **`create-explainer`** — explain complex ideas with clear language, diagrams, interactive HTML, or narrated video, inspired by Andrej Karpathy's approach.
 
 ## Install
 
@@ -28,6 +29,7 @@ Then invoke a skill explicitly—for example:
 ```text
 $create-audio-podcast Turn this report into a podcast I can play on my iPhone.
 $improve-codebase-architecture Find the highest-leverage architecture improvement in this repository.
+$create-explainer Explain this system with an interactive visual that lets me explore how it works.
 ```
 
 Cursor may display installed skills as slash commands, such as `/create-audio-podcast`.
@@ -37,3 +39,5 @@ Each folder under `skills/` is self-contained. `SKILL.md` is the cross-agent sou
 ## Acknowledgment
 
 `improve-codebase-architecture` is an original adaptation inspired by the deep-module and hotspot-first workflow in [Matt Pocock's MIT-licensed skills collection](https://github.com/mattpocock/skills).
+
+`create-explainer` draws on [Andrej Karpathy's original post about clearer explanations and custom learning artifacts](https://x.com/karpathy/status/2105819303471976479).
