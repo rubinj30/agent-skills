@@ -11,15 +11,9 @@
 
 Create an original two-host explainer with the energy of a thoughtful studio conversation. Do not imitate named presenters or reproduce another product's wording.
 
-Use this arc:
+Use **shared discovery**, not a fixed segment sequence. Open with a concrete puzzle worth resolving. Let both hosts bring partial interpretations, examine consequences, and arrive at a more useful answer than either opening interpretation. They may know the source facts already; their discovery is about what those facts mean, not staged ignorance.
 
-1. **Cold open:** expose the surprising question, consequence, or tension in under 30 seconds.
-2. **Orientation:** tell the listener what will be understood by the end.
-3. **Mental model:** explain the core mechanism before details.
-4. **Evidence and example:** make the mechanism concrete.
-5. **Challenge:** let the guiding host question an assumption, limitation, or failure mode.
-6. **Synthesis:** reconcile the answer with the challenge.
-7. **Close:** recap the few ideas worth remembering and any practical next step.
+Keep topic coverage in the brief. Let the spoken structure follow the inquiry: an example exposes a limitation, the limitation prompts a new question, and that question earns the transition. Stay with a useful example across several exchanges rather than replacing it after one explanation. Close by resolving or sharpening the opening puzzle, with any uncertainty intact.
 
 Host roles:
 
@@ -41,17 +35,19 @@ Write for two informed peers thinking through the material together. Neither hos
 - Transition with a connection to the previous idea, rather than repeatedly announcing sections. Finish with the insight or unresolved question the conversation has earned.
 - Keep host names out of most handoffs. Avoid generic podcast greetings, exaggerated praise, sales copy, and a summary after every answer.
 
-Example of the intended exchange, using an illustrative computer-cache topic:
+Example of shared discovery, using an illustrative computer-cache topic:
 
-> Maya: So a cache gives you the answer faster. What do you give up?
+> Maya: Suppose a shop's website is slow. Saving the inventory count seems like an easy win.
 >
-> Theo: Freshness, potentially. You saved an earlier answer, and the underlying data may have changed.
+> Theo: Until two people both see the last bicycle in stock. The saved answer can be perfectly readable and already wrong.
 >
-> Maya: Like seeing yesterday's inventory count. Fast, but the item might be gone.
+> Maya: Then maybe inventory is the wrong thing to save. Keep the description, but check stock when someone buys.
 >
-> Theo: Right. And that changes the design. An old product description may be acceptable. An old stock count at checkout is a different problem.
+> Theo: That helps. Though now the product page and checkout could disagree. We'd need to tell the customer why.
 >
-> Maya: Then the useful question is how old each kind of answer is allowed to be.
+> Maya: So we've moved the problem, not erased it. We get a faster browsing page, and checkout becomes the moment of truth.
+>
+> Theo: Which makes the original question too broad. It isn't whether this site should cache things. It's which answers can be a little old, and where we promise to check again.
 
 Use the example's responsiveness and specificity, not its exact phrases or a fixed template for every topic.
 
@@ -119,6 +115,10 @@ Confirm all of the following:
 - The cold open earns attention without clickbait.
 - A listener receives context before jargon or detail.
 - Both hosts have distinct jobs and react to one another.
+- Each host contributes an interpretation or example and helps refine the other's reasoning; neither exists just to ask questions or agree.
+- Removing speaker labels leaves a developing argument, not a brochure or report divided into alternating paragraphs.
+- Identify a concrete moment where an example or objection changes the explanation. If nothing develops, revise before synthesis.
+- Transitions follow consequences of the discussion, and the ending pays off the opening question rather than repeating a feature inventory.
 - At least one assumption or limitation receives real scrutiny.
 - No host claims personal experience, private knowledge, or human identity.
 - Facts, numbers, and conclusions match `audio-brief.md`.

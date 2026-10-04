@@ -17,7 +17,7 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
 
 2. Build the audio brief.
    - Identify the central question, intended audience, key conclusion, 3–6 supporting ideas, concrete examples, caveats, and useful next action.
-   - Prefer spoken-language explanations over document structure.
+   - Organize around one unresolved question or tension. Keep source/topic coverage as a separate checklist, not the episode outline.
    - Preserve important numbers, uncertainty, and disagreement.
    - Omit footnotes, boilerplate, navigation, and details that do not help a listener understand the subject.
    - Save `audio-brief.md` with a compact source map so factual claims remain auditable.
@@ -26,7 +26,7 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
    - Read [references/podcast-script-format.md](references/podcast-script-format.md) completely before writing the script.
    - Default to 6–12 minutes and approximately 135–155 spoken words per minute unless the user specifies otherwise.
    - Default to Maya, a female co-host, and Theo, a male co-host. Use distinct voices and the detailed delivery directions in the script reference. Both hosts explain and challenge; let them exchange the lead as the topic develops.
-   - Write substantive exchanges rather than alternating monologues. Use questions, clarifications, respectful pushback, callbacks, and synthesis where they improve understanding.
+   - Write shared discovery: two informed peers propose interpretations, test them against concrete examples, and refine a conclusion together. Let the previous exchange create the reason for the next topic.
    - Keep the conversation natural without invented personal experiences, fake quotations, empty banter, or claims absent from the source.
    - Save the structured result as `podcast-script.json` and a human-readable copy as `podcast-script.txt`.
 
@@ -36,7 +36,7 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
    - Expand acronyms on first use, verbalize symbols and URLs, and rewrite dense tables or code as explanations.
    - Remove markdown, citations, stage directions, and parentheticals that the voice model might read aloud. Preserve citations in the brief and transcript metadata instead.
    - Run the renderer with `--dry-run`; resolve every validation error before spending API usage.
-   - Perform the conversation edit in the script reference: check that responses depend on the previous turn, exchanges vary in length, and each topic includes an example and a substantive follow-up.
+   - Perform the conversation edit in the script reference before rendering. If removing speaker labels reveals a feature list or essay split between voices, rewrite the structure. Save the review findings with the audio brief.
 
 5. Render and verify.
    - Set `OPENAI_API_KEY` in the environment or pass `--env-file` pointing to a protected env file. Never print, copy into an artifact, or expose the key.
