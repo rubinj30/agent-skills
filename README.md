@@ -9,7 +9,7 @@ A personal collection of reusable Agent Skills for Codex, with the same `SKILL.m
 - Turn documents, webpages, research, or code changes into a podcast for listening on the go.
 - Write a shared-discovery conversation between a female and male co-host who test ideas together, follow examples, and earn their conclusions instead of reading a feature list.
 - Guide natural phrasing, varied turn lengths, and voice delivery; audition a short pilot when changing voices or delivery.
-- Generate distinct OpenAI voices, a transcript, and an iPhone-friendly M4A recording and player.
+- Generate joint two-host dialogue with Fish Audio Drama 3 by default; OpenAI remains an explicit alternative. Deliver a transcript and iPhone-friendly M4A recording and player.
 - Keep claims grounded in the source and check the audio bundle before delivery.
 - Use with: `$create-audio-podcast Turn this report into a podcast I can listen to on my iPhone.`
 

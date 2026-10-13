@@ -23,14 +23,14 @@ Remove the disposable directory after the output bundle passes verification.
 
 ## Credential is available only on another machine
 
-Keep the credential on the machine where it already exists. The renderer calls the Speech API with Python's standard library and does not need the OpenAI Python package.
+Keep the credential on the machine where it already exists. The renderer uses Python's standard library; neither provider's SDK is required.
 
 Before transferring a script or source-derived brief to another machine, obtain explicit approval and explain what non-secret content will leave the current workspace. Then:
 
 1. Use a purpose-specific temporary directory.
 2. Copy the complete skill directory so `scripts/render_podcast.py` retains access to `assets/mobile-player.html`. If only the script is copied, also copy the template and pass `--template /path/to/mobile-player.html`.
 3. Validate credential presence without printing its value.
-4. Run the renderer where `OPENAI_API_KEY` is already protected.
+4. Run the renderer where the selected provider's key is already protected (`FISH_API_KEY` or `OPENAI_API_KEY`).
 5. Copy only the generated deliverables back.
 6. Remove the temporary remote files and confirm unrelated services were not restarted or reconfigured.
 
@@ -48,7 +48,7 @@ python3 scripts/render_podcast.py podcast-script.json \
   --compress always
 ```
 
-The recovery path regenerates the transcript, player, and manifest, and preserves the existing lossless audio. Use `--template` if the bundled player asset is not beside the renderer.
+The recovery path regenerates the transcript, player, and manifest, and preserves the existing lossless audio. Supply the original provider, model, and voice overrides when repackaging so metadata remains accurate; use `--provider openai` for older OpenAI recordings. Use `--template` if the bundled player asset is not beside the renderer.
 
 ## Verify before delivery
 

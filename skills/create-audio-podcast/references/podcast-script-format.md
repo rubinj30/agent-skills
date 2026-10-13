@@ -94,7 +94,8 @@ Requirements:
 - Keep each turn below 3,900 characters. Mix brief reactions of roughly 3–15 words, focused questions of 10–30 words, and explanations of 30–90 words. These are drafting guides, not quotas.
 - Let turn count follow the conversation and target duration. Do not pad turns to hit a word count; avoid several long explanations in succession.
 - Keep host names and delivery guidance fictional and neutral unless the user supplies alternatives.
-- Start with `marin` for Maya and `cedar` for Theo. These are configurable starting choices, not a guarantee of perceived gender or naturalness. Confirm the requested female/male presentation by listening to a pilot; use `--voice-a` and `--voice-b` to adjust if needed.
+- The example's `voice` fields apply to OpenAI only. Fish uses separate optional `fish_voice` IDs; see [fish-audio.md](fish-audio.md). Confirm the requested female/male presentation by listening to a pilot. CLI voice overrides apply to the selected provider.
+- For Fish, an optional turn `direction` supplies concise plain-language delivery guidance; otherwise the host's `delivery` is used. Keep both fields free of brackets and tags. Keep `text` as spoken words only so the transcript remains clean.
 - Keep `source_note` brief and non-sensitive because it appears in output metadata.
 
 ## Spoken-language rules
@@ -127,4 +128,4 @@ Confirm all of the following:
 
 ## Rendering limits
 
-The renderer passes each host's `delivery` field to speech synthesis on every turn. Put performance directions there; keep spoken text free of stage directions. Each turn is synthesized independently, with a fixed short gap between turns. It does not currently generate coordinated crosstalk, adaptive handoff timing, or overlapping reactions. Write clean handoffs that work within that constraint, and do not promise NotebookLM-equivalent production quality from instructions alone.
+Fish sends the dialogue in one request, including speaker IDs and directions, so it can generate handoffs jointly; it does not guarantee precise overlaps or timing. OpenAI synthesizes each turn independently with a fixed short gap. Write handoffs that remain intelligible with either provider. Do not promise NotebookLM-equivalent production quality without auditioning the result.

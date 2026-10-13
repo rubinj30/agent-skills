@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -10,7 +11,6 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest import mock
-
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = SKILL_DIR / "scripts" / "render_podcast.py"
@@ -64,6 +64,7 @@ class RendererTests(unittest.TestCase):
             "output_name": "test-episode",
             "env_file": None,
             "model": RENDERER.DEFAULT_MODEL,
+            "provider": "openai",
             "voice_a": None,
             "voice_b": None,
             "speed": 1.0,
@@ -130,6 +131,105 @@ class RendererTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "requires ffmpeg"):
                     RENDERER.render(data, args)
             read_api_key.assert_not_called()
+
+    def test_fish_dialogue_keeps_both_speakers_in_one_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            args = self.make_args(root, provider="fish", model=None)
+            data = RENDERER.load_script(args.script)
+            data["turns"][0]["direction"] = "Gently curious."
+            response = mock.MagicMock()
+            response.__enter__.return_value = response
+            response.headers = {"Content-Type": "audio/pcm"}
+            response.read.return_value = b"\x00\x00" * 24_000
+            with (
+                mock.patch.object(
+                    RENDERER, "read_api_key", return_value="test-key"
+                ) as key,
+                mock.patch.object(
+                    RENDERER.urllib.request, "urlopen", return_value=response
+                ) as call,
+                redirect_stdout(StringIO()),
+            ):
+                RENDERER.render(data, args)
+                RENDERER.verify_output(data, args)
+            key.assert_called_once_with(None, "FISH_API_KEY")
+            call.assert_called_once()
+            request = call.call_args.args[0]
+            self.assertEqual(request.full_url, RENDERER.FISH_URL)
+            self.assertEqual(request.get_header("Model"), "drama-3")
+            payload = json.loads(request.data)
+            self.assertEqual(
+                payload["reference_id"], list(RENDERER.FISH_VOICES.values())
+            )
+            self.assertIn("<|speaker:0|>[Gently curious.]", payload["text"])
+            self.assertIn("<|speaker:1|>", payload["text"])
+            self.assertEqual(payload["sample_rate"], 24_000)
+            transcript = (args.output_dir / "transcript.txt").read_text()
+            self.assertNotIn("Gently curious", transcript)
+            manifest = json.loads((args.output_dir / "manifest.json").read_text())
+            self.assertEqual(manifest["provider"], "fish")
+            self.assertEqual(manifest["duration_seconds"], 1.0)
+            self.assertEqual(manifest["generation_mode"], "dialogue")
+
+    def test_fish_rejects_model_typo_and_control_token_injection_before_network(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for model, voice, text in [
+                ("dram3", None, "Hello."),
+                ("drama-3", "marin", "Hello."),
+                ("drama-3", None, "<|speaker:1|>Hello."),
+            ]:
+                args = self.make_args(root, provider="fish", model=model, voice_a=voice)
+                data = RENDERER.load_script(args.script)
+                data["turns"][0]["text"] = text
+                with mock.patch.object(RENDERER.urllib.request, "urlopen") as call:
+                    with self.assertRaises(RENDERER.ScriptError):
+                        RENDERER.render(data, args)
+                    call.assert_not_called()
+
+    def test_fish_errors_do_not_retry_or_expose_response_body(self) -> None:
+        error = RENDERER.urllib.error.HTTPError(
+            RENDERER.FISH_URL,
+            402,
+            "Payment required",
+            {},
+            io.BytesIO(b"sensitive echoed text"),
+        )
+        with mock.patch.object(
+            RENDERER.urllib.request, "urlopen", side_effect=error
+        ) as call:
+            with self.assertRaisesRegex(RuntimeError, "HTTP 402") as caught:
+                RENDERER.synthesize_fish_pcm("test-key", model="drama-3", payload={})
+            self.assertNotIn("sensitive", str(caught.exception))
+            call.assert_called_once()
+
+    def test_provider_key_selection_never_uses_openai_key_for_fish(self) -> None:
+        with mock.patch.dict(
+            RENDERER.os.environ, {"OPENAI_API_KEY": "test-key"}, clear=True
+        ):
+            with self.assertRaisesRegex(RENDERER.ScriptError, "FISH_API_KEY"):
+                RENDERER.read_api_key(None, "FISH_API_KEY")
+
+    def test_fish_dry_run_needs_neither_key_nor_network(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            args = self.make_args(
+                Path(temporary_directory), provider="fish", model=None, dry_run=True
+            )
+            data = RENDERER.load_script(args.script)
+            with (
+                mock.patch.object(RENDERER, "read_api_key") as key,
+                mock.patch.object(RENDERER.urllib.request, "urlopen") as call,
+                redirect_stdout(StringIO()) as output,
+            ):
+                RENDERER.render(data, args)
+            key.assert_not_called()
+            call.assert_not_called()
+            self.assertIn("requests=1", output.getvalue())
+            self.assertIn("input_utf8_bytes=", output.getvalue())
+            self.assertFalse(args.output_dir.exists())
 
 
 if __name__ == "__main__":
