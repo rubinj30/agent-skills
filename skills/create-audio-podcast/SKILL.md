@@ -39,7 +39,8 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
    - Perform the conversation edit in the script reference before rendering. If removing speaker labels reveals a feature list or essay split between voices, rewrite the structure. Save the review findings with the audio brief.
 
 5. Render and verify.
-   - Set `OPENAI_API_KEY` in the environment or pass `--env-file` pointing to a protected env file. Never print, copy into an artifact, or expose the key.
+   - Default to Fish Audio Drama 3 for joint two-host dialogue. Read [references/fish-audio.md](references/fish-audio.md) before using it, including setup, voice selection, cost confirmation, and pilot approval.
+   - Set `FISH_API_KEY` in the environment or pass `--env-file` pointing to a protected env file. OpenAI remains available explicitly with `--provider openai` and `OPENAI_API_KEY`; never switch silently. Never print, copy into an artifact, or expose either key.
    - For a mobile deliverable, preflight the template and require M4A packaging before spending speech API usage:
 
      ```bash
@@ -52,7 +53,7 @@ Produce an accurate audio brief, a genuine two-host conversation, and a mobile-r
      python3 scripts/render_podcast.py podcast-script.json --output-dir podcast-output --compress always
      ```
 
-   - The renderer uses the Speech API directly and does not require the OpenAI Python package. It writes a lossless WAV, creates an M4A through `ffmpeg` or optional `imageio-ffmpeg`, and builds `index.html`, `transcript.txt`, and `manifest.json`.
+   - The renderer calls the chosen API using Python's standard library. It writes a lossless WAV, creates an M4A through `ffmpeg` or optional `imageio-ffmpeg`, and builds `index.html`, `transcript.txt`, and `manifest.json`.
    - Run the deterministic bundle check after rendering:
 
      ```bash

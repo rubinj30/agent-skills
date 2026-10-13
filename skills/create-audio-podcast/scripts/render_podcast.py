@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a validated two-host podcast script with OpenAI text-to-speech."""
+"""Render a two-host podcast with Fish Audio dialogue or OpenAI per-turn speech."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,9 +20,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 DEFAULT_MODEL = "gpt-4o-mini-tts"
+FISH_MODEL = "drama-3"
+FISH_URL = "https://api.fish.audio/v1/tts"
+# Public example voices from Fish's Drama 3 documentation; audition before use.
+FISH_VOICES = {
+    "host_a": "c70cfb98867a4bfb9ae20d2401257b92",  # Delia
+    "host_b": "bf322df2096a46f18c579d0baa36f41d",  # Adrian
+}
 DEFAULT_VOICES = {"host_a": "marin", "host_b": "cedar"}
 SAMPLE_RATE = 24_000
 CHANNELS = 1
@@ -44,9 +51,14 @@ def parse_args() -> argparse.Namespace:
         "--output-name", default="podcast", help="Safe basename without extension"
     )
     parser.add_argument(
-        "--env-file", type=Path, help="Optional env file containing OPENAI_API_KEY"
+        "--env-file",
+        type=Path,
+        help="Protected env file containing the selected provider's key",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--provider", choices=("fish", "openai"), default="fish")
+    parser.add_argument(
+        "--model", help="Defaults to drama-3 for Fish or gpt-4o-mini-tts for OpenAI"
+    )
     parser.add_argument("--voice-a", help="Override host_a voice")
     parser.add_argument("--voice-b", help="Override host_b voice")
     parser.add_argument("--speed", type=float, default=1.0)
@@ -141,12 +153,12 @@ def load_script(path: Path) -> dict[str, Any]:
     return data
 
 
-def read_api_key(env_file: Path | None) -> str:
-    value = os.environ.get("OPENAI_API_KEY", "").strip()
+def read_api_key(env_file: Path | None, key_name: str = "OPENAI_API_KEY") -> str:
+    value = os.environ.get(key_name, "").strip()
     if value:
         return value
     if env_file is None:
-        raise ScriptError("Set OPENAI_API_KEY or provide --env-file")
+        raise ScriptError(f"Set {key_name} or provide --env-file")
     try:
         lines = env_file.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -156,12 +168,12 @@ def read_api_key(env_file: Path | None) -> str:
         if line.startswith("export "):
             line = line[7:].lstrip()
         key, separator, candidate = line.partition("=")
-        if separator and key.strip() == "OPENAI_API_KEY":
+        if separator and key.strip() == key_name:
             value = candidate.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
         value = value[1:-1]
     if not value:
-        raise ScriptError("OPENAI_API_KEY is empty")
+        raise ScriptError(f"{key_name} is empty")
     return value
 
 
@@ -172,6 +184,89 @@ def speech_instructions(host: dict[str, str]) -> str:
         "while remaining clear. Use subtle changes in pace and emphasis. Avoid an announcer "
         "voice, exaggerated emotion, and added words."
     )
+
+
+def selected_voices(data: dict[str, Any], args: argparse.Namespace) -> dict[str, str]:
+    voices = {}
+    for speaker, override in (("host_a", args.voice_a), ("host_b", args.voice_b)):
+        host = data["hosts"][speaker]
+        voice = override or (
+            host.get("fish_voice", FISH_VOICES[speaker])
+            if args.provider == "fish"
+            else host["voice"]
+        )
+        voice = require_text(voice, f"{speaker} voice", max_chars=100)
+        if args.provider == "fish" and not re.fullmatch(r"[a-fA-F0-9]{32}", voice):
+            raise ScriptError(
+                "Fish voices must be 32-character voice IDs, not OpenAI names"
+            )
+        voices[speaker] = voice
+    if args.provider == "fish" and len(set(voices.values())) != 2:
+        raise ScriptError("Fish dialogue requires two distinct voice IDs")
+    return voices
+
+
+def fish_payload(
+    data: dict[str, Any], voices: dict[str, str], speed: float
+) -> dict[str, Any]:
+    lines = []
+    for turn in data["turns"]:
+        speaker = turn["speaker"]
+        direction = require_text(
+            turn.get("direction", data["hosts"][speaker]["delivery"]),
+            "Fish direction",
+            max_chars=500,
+        )
+        # Keep synthesis control tokens out of source-derived speech and transcripts.
+        if any(char in direction + turn["text"] for char in "[]<>"):
+            raise ScriptError(
+                "Fish text and direction must be plain text without brackets or tags"
+            )
+        index = 0 if speaker == "host_a" else 1
+        lines.append(f"<|speaker:{index}|>[{direction}] {turn['text']}")
+    return {
+        "text": "\n".join(lines),
+        "reference_id": [voices["host_a"], voices["host_b"]],
+        "format": "pcm",
+        "sample_rate": SAMPLE_RATE,
+        "prosody": {"speed": speed},
+    }
+
+
+def synthesize_fish_pcm(api_key: str, *, model: str, payload: dict[str, Any]) -> bytes:
+    if model not in {"drama-3", "drama-3-preview"}:
+        raise ScriptError("Fish model must be drama-3 or drama-3-preview")
+    request = urllib.request.Request(
+        FISH_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "model": model,
+        },
+    )
+    # No blind retry: a timeout can follow paid generation. Never switch providers.
+    try:
+        with urllib.request.urlopen(request, timeout=600) as response:
+            content_type = response.headers.get("Content-Type", "").lower()
+            audio = response.read()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(
+            f"Fish Audio returned HTTP {exc.code}; no automatic retry"
+        ) from None
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(
+            "Fish Audio request failed; check usage before retrying"
+        ) from exc
+    if (
+        "json" in content_type
+        or "text/" in content_type
+        or not audio
+        or len(audio) % (CHANNELS * SAMPLE_WIDTH)
+    ):
+        raise RuntimeError("Fish Audio returned invalid PCM audio")
+    return audio
 
 
 def synthesize_pcm(
@@ -447,6 +542,9 @@ def preflight_packaging(args: argparse.Namespace) -> tuple[Path, str | None]:
 
 def render(data: dict[str, Any], args: argparse.Namespace) -> None:
     output_name = safe_output_name(args.output_name)
+    args.model = args.model or (
+        FISH_MODEL if args.provider == "fish" else DEFAULT_MODEL
+    )
     if not 0.25 <= args.speed <= 4.0:
         raise ScriptError("--speed must be between 0.25 and 4.0")
     if args.dry_run and (args.package_existing or args.verify_only):
@@ -456,16 +554,30 @@ def render(data: dict[str, Any], args: argparse.Namespace) -> None:
     characters = sum(len(turn["text"]) for turn in data["turns"])
     words = sum(len(turn["text"].split()) for turn in data["turns"])
     estimated_minutes = words / 145
+    if args.verify_only:
+        verify_output(data, args)
+        return
+    voices = selected_voices(data, args)
+    payload = None
+    if args.provider == "fish":
+        if args.model not in {"drama-3", "drama-3-preview"}:
+            raise ScriptError("Fish model must be drama-3 or drama-3-preview")
+        if args.speed != 1.0:
+            raise ScriptError(
+                "Fish dialogue currently requires --speed 1.0; direct pacing in words"
+            )
+        payload = fish_payload(data, voices, args.speed)
     if args.dry_run:
         preflight_packaging(args)
         print(
             f"valid=true turns={len(data['turns'])} characters={characters} "
-            f"estimated_minutes={estimated_minutes:.1f}"
+            f"estimated_minutes={estimated_minutes:.1f} provider={args.provider} model={args.model} "
+            f"requests={1 if payload else len(data['turns'])}"
         )
-        return
-
-    if args.verify_only:
-        verify_output(data, args)
+        if payload:
+            print(
+                f"input_utf8_bytes={len(payload['text'].encode('utf-8'))} price=confirm_with_provider"
+            )
         return
 
     template_path, ffmpeg = preflight_packaging(args)
@@ -478,6 +590,22 @@ def render(data: dict[str, Any], args: argparse.Namespace) -> None:
     if args.package_existing:
         duration_seconds = package_existing_wav(args.package_existing, wav_path)
         print(f"packaged_existing={args.package_existing}")
+    elif args.provider == "fish":
+        api_key = read_api_key(args.env_file, "FISH_API_KEY")
+        assert payload is not None
+        pcm = synthesize_fish_pcm(api_key, model=args.model, payload=payload)
+        partial_path = args.output_dir / f".{output_name}.partial.wav"
+        try:
+            with wave.open(str(partial_path), "wb") as writer:
+                writer.setnchannels(CHANNELS)
+                writer.setsampwidth(SAMPLE_WIDTH)
+                writer.setframerate(SAMPLE_RATE)
+                writer.writeframes(pcm)
+            partial_path.replace(wav_path)
+        except Exception:
+            partial_path.unlink(missing_ok=True)
+            raise
+        duration_seconds = len(pcm) / (CHANNELS * SAMPLE_WIDTH * SAMPLE_RATE)
     else:
         api_key = read_api_key(args.env_file)
         partial_path = args.output_dir / f".{output_name}.partial.wav"
@@ -540,11 +668,18 @@ def render(data: dict[str, Any], args: argparse.Namespace) -> None:
         "title": data["title"],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "ai_generated_voices": True,
+        "provider": args.provider,
         "model": args.model,
-        "voices": {
-            "host_a": args.voice_a or data["hosts"]["host_a"]["voice"],
-            "host_b": args.voice_b or data["hosts"]["host_b"]["voice"],
-        },
+        "model_verification": "requested_not_server_confirmed",
+        "voices": voices,
+        "generation_mode": "repackaged"
+        if args.package_existing
+        else ("dialogue" if args.provider == "fish" else "per_turn"),
+        "request_sha256": hashlib.sha256(
+            json.dumps(payload, sort_keys=True).encode()
+        ).hexdigest()
+        if payload
+        else None,
         "turns": len(data["turns"]),
         "characters": characters,
         "duration_seconds": round(duration_seconds, 3),
